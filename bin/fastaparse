@@ -1,0 +1,125 @@
+#!/usr/bin/env python3.6
+
+""" IMPORTS """
+import sys
+import argparse
+import os
+
+""" UTILITIES """ 
+def parse_args(parser, commands):
+    # Divide argv by commands
+    split_argv = [[]]
+    for c in sys.argv[1:]:
+        if c in commands.choices:
+            split_argv.append([c])
+        else:
+            split_argv[-1].append(c)
+    # Initialize namespace
+    args = argparse.Namespace()
+    for c in commands.choices:
+        setattr(args, c, None)
+    # Parse each command
+    parser.parse_args(split_argv[0], namespace=args)  # Without command
+    for argv in split_argv[1:]:  # Commands
+        n = argparse.Namespace()
+        setattr(args, argv[0], n)
+        parser.parse_args(argv, namespace=n)
+    return args
+
+def reverse_complement(sequence):
+        complement = {
+                'A' : 'T',
+                'T' : 'A',
+                'G' : 'C',
+                'C' : 'G',
+                'N' : 'N'
+        }
+        return ''.join([complement[base] for base in sequence[::-1]])
+
+def reverse(sequence):
+        return sequence[::-1]
+
+""" COMMANDS """
+def run_cmdRecordLength(filename,name):
+        maincmd_string = "grep -A1 '^>" + name + "$' " + filename + \
+                        " | tail -n+2 | wc -c"
+        output = os.popen(maincmd_string).read()
+        print(output)
+def run_cmdRecordParser(filename,name,rng,revcomp,count,section):
+        maincmd_string = "grep -A1 '^>" + name + \
+                "$' " + filename
+        output = os.popen(maincmd_string).read()
+        final_output = ""
+        if(rng == None):
+                if(revcomp == True):
+                        lines = output.splitlines()
+                        lines[1] = reverse_complement(lines[1])
+                        if(count == True):
+                                print(len(lines[1]))
+                        else:
+                                print('\n'.join(lines))
+                else:
+                        if(count == True):
+                                print(len(output.splitlines()[1]))
+                        else:
+                                print(output)
+
+        else:
+                sub_out = ""
+                if(revcomp == True and section == False):
+                        lines = output.splitlines()
+                        lines[1] = reverse_complement(lines[1])
+                        sub_out = '\n'.join(lines)
+                else:
+                        sub_out = output
+
+                start,end = [int(x) for x in rng.split("-")]
+                o_lines = sub_out.splitlines()
+                o_lines[1] = o_lines[1][start-1:end]
+                if(count == True):
+                        print(len(o_lines[1]))
+                else:
+                        if(section == True):
+                                o_lines[1] = reverse_complement(o_lines[1])
+                        print('\n'.join(o_lines))
+
+""" MAIN """
+def main():
+        parser = argparse.ArgumentParser()
+        commands = parser.add_subparsers(title='sub-commands')
+
+        cmdRecordParser = commands.add_parser('record')
+        cmdRecordParser.add_argument('filename',help="The multi-FASTA file name")
+        cmdRecordParser.add_argument('name',help="The name of the FASTA record to obtain")
+        cmdRecordParser.add_argument('--range')
+        cmdRecordParser.add_argument('--revcomp',action='store_true')
+        cmdRecordParser.add_argument('--count',action='store_true')
+        cmdRecordParser.add_argument('--section',action='store_true')
+
+        cmdRecordLength = commands.add_parser('length')
+        cmdRecordLength.add_argument('filename',help="The multi-FASTA file name")
+        cmdRecordLength.add_argument('name',help="The name of the FASTA record to obtain")
+
+        args = parse_args(parser, commands)
+
+        if(args.record != None):
+                filename = args.record.filename
+                name = args.record.name
+                range = args.record.range
+                revcomp = args.record.revcomp
+                count = args.record.count
+                section = args.record.section
+                run_cmdRecordParser(filename,name,range,revcomp,count,section)
+        elif(args.length != None):
+                filename = args.length.filename
+                name = args.length.name
+                run_cmdRecordLength(filename,name)
+        else:
+                print("usage: fasta [-h] {record,length} ...\n")
+                print("optional arguments:")
+                print("\t-h, --help\t\tshow this help message and exit\n")
+                print("sub-commands:")
+                print("\t{record,length}")
+
+if __name__ == '__main__':
+        main()
