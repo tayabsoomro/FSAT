@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#########################################
+# FSAT -- FASTA & SAM Alignment Tool    #
+#                                       #
+# Author: Tayab Soomro                  #
+# 09/07/2019                            #
+#########################################
+
+# BINARIES
+SAMTOCSV_BINARY="./bin/samtocsv"
+FASTAPARSE_BINARY="./bin/fastaparse"
+
+if [ $# -lt 1 ]; then
+    echo "USAGE: fsat [ samtocsv | fastaparse ]"
+    exit 1
+else
+    if [ "$1" = "samtocsv" ]; then
+        PROGRAM=$SAMTOCSV_BINARY
+    elif [ "$1" = "fastaparse" ]; then
+        PROGRAM=$FASTAPARSE_BINARY
+    fi
+    $PORGRAM ${@:2}
+fi
+
