@@ -1,0 +1,163 @@
+#!/usr/bin/bash
+
+
+if [ "$#" -lt 3 ]; then
+        echo "USAGE: samtocsv <SAM_File> <PATH_TO_FLYE_CONTIGS> <PATH_TO_NEWBLER CONTIGS>"
+        exit 1
+else
+        SAM=$1
+        PATH_TO_FLYE_CONTIGS=$2
+        PATH_TO_NEWBLER_CONTIGS=$3
+fi
+
+
+#SAM=/isilon/saskatoon-rdc/users/soomrot/genome_comparison/minimap2/run4_pbpt3.sorted.bam
+#PATH_TO_FLYE_CONTIGS=/isilon/saskatoon-rdc/users/soomrot/data/OX1905abc/OX1905-Assembly/run4/all_contigs.fasta
+#PATH_TO_NEWBLER_CONTIGS=/isilon/saskatoon-rdc/users/soomrot/genome_comparison/nucmer_run/pbpt3.fasta
+PATH_TO_FASTA_PROG=/home/AAFC-AAC/soomrot/software
+
+prev_end_ref=-404
+prev_end_query=-404
+prev_old_contig_name=""
+
+echo    "Newbler Contig",\
+        "Old Contig Length",\
+        "Flye Contig",\
+        "Flye Contig Length",\
+        "Start in Ref",\
+        "End in Ref",\
+        "Length in Ref",\
+        "Deletions from Ref",\
+        "Insertions in Ref",\
+        "Start in Query",\
+        "End in Query",\
+        "Length in Query",\
+        "Gap length in Ref",\
+        "Gap Sequence"
+for contig in `grep "^>" $PATH_TO_FLYE_CONTIGS | xargs | sed 's/>//g'`; do
+        IFS=$'\n'
+        lines=`samtools view $SAM | awk -v contig=$contig '{if($3==contig && $2!=4 && \
+        $10 != "*")print $0}'`
+        for line in $lines; do
+                flag=$(echo $line | awk '{print $2}');
+                cigar=$(echo $line | awk '{print $6}');
+                old_contig=$(echo $line | awk '{print $1}');
+                new_contig=$(echo $line | awk '{print $3}');
+                start_ref=$(echo $line | awk '{print $4}');
+                len_ref=$(echo $cigar | grep -oE "[0-9]{1,}[MDN]" | xargs | \
+                        sed "s/[MDN]/+/g;s/\s//g;s/.$//g;" | bc);
+                end_ref=$(echo "$start_ref+$len_ref" | bc);
+                insertions=$(echo $cigar | if [ $(grep -coE "[0-9]{1,}[I]") \
+                        -eq 0 ]; then echo "0"; else echo $cigar | \
+                        grep -oE "[0-9]{1,}I" | xargs | \
+                        sed "s/I/+/g;s/\s//g;s/.$//g;" | bc; fi);
+                deletions=$(echo $cigar | if [ $(grep -coE "[0-9]{1,}D") \
+                        -eq 0 ]; then echo "0"; else echo $cigar | grep -oE \
+                        "[0-9]{1,}D" | xargs | sed "s/D/+/g;s/\s//g;s/.$//g;" \
+                        | bc;  fi);
+                tmp=$(echo $cigar | grep -oE "^[0-9]{1,}H" | sed "s/H//g;");
+                start_query=$(echo $cigar | if [ $(grep -coE "^[0-9]{1,}H") \
+                        -eq 0 ]; then echo "1"; else echo $tmp; fi );
+                len_query=$(echo $cigar | grep -oE "[0-9]{1,}[MI]" | xargs | \
+                        sed "s/[MI]/+/g;s/\s//g;s/.$//g;" | bc);
+                end_query=$(echo "$start_query+$len_query" | bc);
+
+                old_contig_length=$($PATH_TO_FASTA_PROG/fasta.py length \
+                        $PATH_TO_NEWBLER_CONTIGS $old_contig)
+                new_contig_length=$($PATH_TO_FASTA_PROG/fasta.py length \
+                        $PATH_TO_FLYE_CONTIGS $new_contig)
+
+
+
+
+                res=$($PATH_TO_FASTA_PROG/getflags.py $flag 16);
+
+                if [ "$prev_end_ref" -eq -404 ] && [ "$prev_end_query" -eq -404 ]; then
+                        gap=""
+                        gap_start=""
+                        gap_end=""
+
+                        gap_start_query=""
+                        gap_end_query=""
+                else
+                        diff=$(echo "$start_ref-$prev_end_ref" | bc)
+                        gap=${diff#-}
+                        gap_start=$prev_end_ref
+                        gap_end=$start_ref
+                        gap_old_contig_name=$old_contig
+
+                        gap_start_query=$prev_end_query
+                        gap_end_query=$start_query
+
+                        if [ "$prev_old_contig_name" = "$old_contig" ]; then
+                                seq=1
+                                old_contig_name="$old_contig"
+                        else seq=0; fi
+
+
+                fi
+                export prev_end_ref=$end_ref
+                export prev_end_query=$end_query
+                export prev_old_contig_name=$old_contig
+
+                if ! [ -z "$gap_start" ] && [ "$gap" -ne 0  ]; then
+
+                        if ! [ -z $seq ]; then
+
+                                abs_gap_start=$(echo "$gap_start_query-10"|bc)
+                                gap_start_end=$(echo "$gap_start_query+5"|bc)
+
+                                gap_end_start=$(echo "$gap_end_query-5"|bc)
+                                abs_gap_end=$(echo "$gap_end_query+10"|bc)
+
+                                if [ $gap_end_start -lt 1 ]; then
+                                        gap_end_start=1
+                                fi
+                                if [ $abs_gap_start -lt 1 ]; then
+                                        abs_gap_start=1
+                                fi
+                                if [ "$res" = "True" ]; then
+                                        SEQ_FIRST=$($PATH_TO_FASTA_PROG/fasta.py \
+                                        record $PATH_TO_NEWBLER_CONTIGS $old_contig_name \
+                                        --range=$abs_gap_start-$gap_start_end\
+                                        --revcomp | tail -n+2)
+                                        SEQ_SECOND=$($PATH_TO_FASTA_PROG/fasta.py \
+                                        record $PATH_TO_NEWBLER_CONTIGS $old_contig_name \
+                                        --range=$gap_end_start-$abs_gap_end \
+                                        --revcomp | tail -n+2)
+                                else
+                                        SEQ_FIRST=$($PATH_TO_FASTA_PROG/fasta.py \
+                                        record $PATH_TO_NEWBLER_CONTIGS $old_contig_name \
+                                        --range=$abs_gap_start-$gap_start_end\
+                                        | tail -n+2)
+                                        SEQ_SECOND=$($PATH_TO_FASTA_PROG/fasta.py \
+                                        record $PATH_TO_NEWBLER_CONTIGS $old_contig_name \
+                                        --range=$gap_end_start-$abs_gap_end \
+                                        | tail -n+2)
+                                fi
+                                SEQ=$(echo "$SEQ_FIRST...$SEQ_SECOND")
+
+
+                        fi
+                        echo ,,$new_contig,$new_contig_length,$gap_start,$gap_end,$gap,,,,,,$gap,$SEQ
+                fi
+                
+                echo    $old_contig,\
+                        $old_contig_length,\
+                        $new_contig,\
+                        $new_contig_length,\
+                        $start_ref,\
+                        $end_ref,\
+                        $len_ref,\
+                        $insertions,\
+                        $deletions,\
+                        $start_query,\
+                        $end_query,\
+                        $len_query \
+                | sed "s/\s//g" | sort -t, -n -k3,3;
+
+
+        done
+
+done
+
