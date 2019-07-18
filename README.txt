@@ -3,7 +3,7 @@
 - FSAT -- FASTA & SAM Analysis Tool                                           -
 -                                                                             -
 - Author: Tayab Soomro
-- Agriculture & Agri-Food Canada, SRDC                                                       -
+- Agriculture & Agri-Food Canada, SRDC                                        -
 - 09/06/2019                                                                  -
 ===============================================================================
 
