@@ -115,7 +115,7 @@ def main():
                 name = args.length.name
                 run_cmdRecordLength(filename,name)
         else:
-                print("usage: fasta [-h] {record,length} ...\n")
+                print("usage: fastaparse [-h] {record,length} ...\n")
                 print("optional arguments:")
                 print("\t-h, --help\t\tshow this help message and exit\n")
                 print("sub-commands:")
